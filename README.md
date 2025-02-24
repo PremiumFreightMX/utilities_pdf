@@ -21,7 +21,17 @@ Antes de ejecutar la aplicación, instala los siguientes paquetes de Python:
 pip install pillow pdf2image pypdf tk
 
 ## **También necesitas Poppler para convertir PDFs a imágenes:**
-Windows: Descárgalo desde Poppler for Windows.
+Descárgalo desde [Poppler for Windows](https://github.com/oschwartz10612/poppler-windows).
+
+## **Agregar Poppler al PATH (para que funcione en cualquier lugar)**
+Abre Explorador de archivos y copia la ruta donde extrajiste Poppler, por ejemplo:
+C:\poppler-23.11.0\Library\bin
+Presiona Win + R, escribe sysdm.cpl y presiona Enter.
+En la ventana Propiedades del sistema, ve a la pestaña "Opciones avanzadas".
+Haz clic en "Variables de entorno...".
+En "Variables del sistema", selecciona la variable Path y haz clic en "Editar...".
+Haz clic en "Nuevo" y pega la ruta copiada (C:\poppler-23.11.0\Library\bin).
+Presiona "Aceptar" en todas las ventanas para guardar los cambios.
 ```
 
 ---
