@@ -1,6 +1,7 @@
 import os
 import threading
 import tkinter as tk
+import hashlib
 from tkinter import filedialog, messagebox, ttk
 from PIL import Image, ImageTk
 from pdf2image import convert_from_path
@@ -15,44 +16,66 @@ compression_levels = {
 
 # Ruta del logo (debe estar en la misma carpeta que el script)
 LOGO_PATH = "logo.png"
+MARKER_TEXT = "PDF_COMPRESSED_BY_TOOL"
+
+# Generar una firma oculta en los metadatos del pdf indicando que ya fue comprimido, bloqueando la operacion.
+def calculate_pdf_hash(pdf_path):
+    """Calcula un hash SHA256 del archivo PDF."""
+    hasher = hashlib.sha256()
+    with open(pdf_path, 'rb') as f:
+        hasher.update(f.read())
+    return hasher.hexdigest()
+
+def is_pdf_compressed(pdf_path):
+    """Verifica si el PDF ya ha sido comprimido."""
+    try:
+        reader = PdfReader(pdf_path)
+        return any(MARKER_TEXT in (meta or "") for meta in reader.metadata.values())
+    except Exception:
+        return False
 
 def compress_pdf(dpi):
-    """Función que maneja la compresión en un hilo separado"""
     def run_compression():
         input_path = filedialog.askopenfilename(title="Selecciona un archivo PDF", filetypes=[("Archivos PDF", "*.pdf")])
         if not input_path:
             messagebox.showerror("Error", "No seleccionaste ningún archivo.")
             return
 
-        output_path = filedialog.asksaveasfilename(title="Guardar archivo comprimido", defaultextension=".pdf",
-                                                   filetypes=[("Archivos PDF", "*.pdf")])
+        if is_pdf_compressed(input_path):
+            messagebox.showwarning("Advertencia", "Este archivo ya ha sido comprimido y no se puede volver a procesar.")
+            return
+
+        output_path = filedialog.asksaveasfilename(title="Guardar archivo comprimido", defaultextension=".pdf", filetypes=[("Archivos PDF", "*.pdf")])
         if not output_path:
             messagebox.showerror("Error", "No especificaste una ruta de salida.")
             return
 
         try:
-            progress_bar["value"] = 10  # Inicia la barra de progreso
+            progress_bar["value"] = 10
             root.update_idletasks()
 
-            # Convertir PDF a imágenes
             images = convert_from_path(input_path, dpi=dpi)
 
-            progress_bar["value"] = 50  # Mitad del proceso
+            progress_bar["value"] = 50
             root.update_idletasks()
 
-            # Guardar imágenes comprimidas como PDF
-            images[0].save(output_path, save_all=True, append_images=images[1:], quality=70)
+            writer = PdfWriter()
+            for img in images:
+                writer.add_blank_page(width=img.width, height=img.height)
+            
+            writer.add_metadata({"/Title": MARKER_TEXT})
+            with open(output_path, "wb") as out_file:
+                writer.write(out_file)
 
-            progress_bar["value"] = 100  # Finaliza
+            progress_bar["value"] = 100
             root.update_idletasks()
 
             messagebox.showinfo("Éxito", f"PDF comprimido guardado en:\n{output_path}")
         except Exception as e:
             messagebox.showerror("Error", str(e))
         finally:
-            progress_bar["value"] = 0  # Reinicia la barra
+            progress_bar["value"] = 0
 
-    # Crear un hilo para ejecutar la compresión sin bloquear la interfaz
     threading.Thread(target=run_compression, daemon=True).start()
 
 def merge_pdfs():
