@@ -2,10 +2,12 @@ import os
 import threading
 import tkinter as tk
 import hashlib
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, ttk, simpledialog
 from PIL import Image, ImageTk
 from pdf2image import convert_from_path
 from pypdf import PdfWriter, PdfReader
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
 
 # Configuración de niveles de compresión (DPI)
 compression_levels = {
@@ -14,26 +16,38 @@ compression_levels = {
     "Baja": 80     # Más compresión (máxima reducción)
 }
 
-# Ruta del logo (debe estar en la misma carpeta que el script)
+# Ruta del logo
 LOGO_PATH = "logo.png"
 MARKER_TEXT = "PDF_COMPRESSED_BY_TOOL"
 
-# Generar una firma oculta en los metadatos del pdf indicando que ya fue comprimido, bloqueando la operacion.
-def calculate_pdf_hash(pdf_path):
-    """Calcula un hash SHA256 del archivo PDF."""
-    hasher = hashlib.sha256()
-    with open(pdf_path, 'rb') as f:
-        hasher.update(f.read())
-    return hasher.hexdigest()
-
+# Función para verificar si el PDF ya fue comprimido
 def is_pdf_compressed(pdf_path):
-    """Verifica si el PDF ya ha sido comprimido."""
     try:
         reader = PdfReader(pdf_path)
         return any(MARKER_TEXT in (meta or "") for meta in reader.metadata.values())
     except Exception:
         return False
 
+# Nueva función para convertir imágenes en PDF y agregar las páginas correctamente
+def images_to_pdf(images, output_path):
+    """Convierte imágenes a un archivo PDF."""
+    writer = PdfWriter()
+    
+    for img in images:
+        temp_pdf_path = "temp_page.pdf"
+        img.save(temp_pdf_path, "PDF", resolution=100)  # Se guarda temporalmente como PDF
+        reader = PdfReader(temp_pdf_path)
+        writer.add_page(reader.pages[0])  # Se añade la página correctamente
+
+    # Agregar metadatos de compresión
+    writer.add_metadata({"/Title": MARKER_TEXT})
+    
+    with open(output_path, "wb") as out_file:
+        writer.write(out_file)
+
+    os.remove(temp_pdf_path)  # Eliminar archivo temporal
+
+# Función para comprimir PDFs
 def compress_pdf(dpi):
     def run_compression():
         input_path = filedialog.askopenfilename(title="Selecciona un archivo PDF", filetypes=[("Archivos PDF", "*.pdf")])
@@ -45,7 +59,8 @@ def compress_pdf(dpi):
             messagebox.showwarning("Advertencia", "Este archivo ya ha sido comprimido y no se puede volver a procesar.")
             return
 
-        output_path = filedialog.asksaveasfilename(title="Guardar archivo comprimido", defaultextension=".pdf", filetypes=[("Archivos PDF", "*.pdf")])
+        output_path = filedialog.asksaveasfilename(title="Guardar archivo comprimido", defaultextension=".pdf",
+                                                   filetypes=[("Archivos PDF", "*.pdf")])
         if not output_path:
             messagebox.showerror("Error", "No especificaste una ruta de salida.")
             return
@@ -54,18 +69,13 @@ def compress_pdf(dpi):
             progress_bar["value"] = 10
             root.update_idletasks()
 
-            images = convert_from_path(input_path, dpi=dpi)
+            images = convert_from_path(input_path, dpi=dpi)  # Convertir PDF en imágenes
 
             progress_bar["value"] = 50
             root.update_idletasks()
 
-            writer = PdfWriter()
-            for img in images:
-                writer.add_blank_page(width=img.width, height=img.height)
-            
-            writer.add_metadata({"/Title": MARKER_TEXT})
-            with open(output_path, "wb") as out_file:
-                writer.write(out_file)
+            # Llamar a la función corregida que genera un PDF desde imágenes
+            images_to_pdf(images, output_path)
 
             progress_bar["value"] = 100
             root.update_idletasks()
@@ -78,14 +88,14 @@ def compress_pdf(dpi):
 
     threading.Thread(target=run_compression, daemon=True).start()
 
+# Función para unir múltiples PDFs
 def merge_pdfs():
-    """Función para unir múltiples archivos PDF en uno solo usando PdfWriter"""
     def run_merge():
         files = filedialog.askopenfilenames(title="Selecciona los archivos PDF", filetypes=[("Archivos PDF", "*.pdf")])
         if not files:
             messagebox.showerror("Error", "No seleccionaste archivos.")
             return
-        
+
         output_path = filedialog.asksaveasfilename(title="Guardar PDF combinado", defaultextension=".pdf",
                                                    filetypes=[("Archivos PDF", "*.pdf")])
         if not output_path:
@@ -93,7 +103,7 @@ def merge_pdfs():
             return
 
         try:
-            progress_bar["value"] = 10  # Inicia la barra de progreso
+            progress_bar["value"] = 10
             root.update_idletasks()
 
             writer = PdfWriter()
@@ -102,27 +112,25 @@ def merge_pdfs():
                 for page in reader.pages:
                     writer.add_page(page)
 
-            progress_bar["value"] = 50  # Mitad del proceso
+            progress_bar["value"] = 50
             root.update_idletasks()
 
             with open(output_path, "wb") as out_file:
                 writer.write(out_file)
 
-            progress_bar["value"] = 100  # Finaliza
+            progress_bar["value"] = 100
             root.update_idletasks()
 
             messagebox.showinfo("Éxito", f"PDF combinado guardado en:\n{output_path}")
         except Exception as e:
             messagebox.showerror("Error", str(e))
         finally:
-            progress_bar["value"] = 0  # Reinicia la barra
+            progress_bar["value"] = 0
 
-    # Crear un hilo para ejecutar la unión sin bloquear la interfaz
     threading.Thread(target=run_merge, daemon=True).start()
 
+# Función para proteger un PDF con contraseña
 def protect_pdf():
-    """Protege un PDF con contraseña para abrirlo e imprimirlo."""
-
     def run_protection(input_path, output_path, password):
         try:
             progress_bar["value"] = 10  
@@ -134,7 +142,6 @@ def protect_pdf():
             for page in reader.pages:
                 writer.add_page(page)
 
-            # Configurar permisos para que requiera contraseña al abrir y al imprimir
             writer.encrypt(user_password=password, owner_password=None, permissions_flag=0)
 
             progress_bar["value"] = 50  
@@ -162,7 +169,7 @@ def protect_pdf():
         if not output_path:
             return
 
-        password = tk.simpledialog.askstring("Contraseña", "Introduce la contraseña para proteger el PDF:", show="*")
+        password = simpledialog.askstring("Contraseña", "Introduce la contraseña para proteger el PDF:", show="*")
         if not password:
             messagebox.showerror("Error", "Debes ingresar una contraseña.")
             return
@@ -171,46 +178,27 @@ def protect_pdf():
 
     root.after(100, ask_password)
 
-# Crear la ventana principal
+# Interfaz gráfica con Tkinter
 root = tk.Tk()
 root.title("Compresor y Unificador de PDFs")
-root.geometry("400x480")
+root.geometry("470x500")
 root.resizable(False, False)
 
-# Cargar y mostrar el logo
+# Cargar logo
 if os.path.exists(LOGO_PATH):
     img = Image.open(LOGO_PATH)
-    img = img.resize((150, 100), Image.Resampling.LANCZOS)
+    img = img.resize((170, 120), Image.Resampling.LANCZOS)
     logo = ImageTk.PhotoImage(img)
     logo_label = tk.Label(root, image=logo)
     logo_label.pack(pady=10)
 
-# Etiqueta de bienvenida
-label = tk.Label(root, text="Selecciona una opción", font=("Arial", 12))
-label.pack(pady=10)
-
-# Botones de nivel de compresión
-btn_high = tk.Button(root, text="Calidad Alta 180 DPI (Menos compresión)", command=lambda: compress_pdf(compression_levels["Alta"]),
-                     font=("Arial", 10), bg="lightgreen", width=35)
-btn_high.pack(pady=5)
-
-btn_medium = tk.Button(root, text="Calidad Media 120 DPI (Compresión equilibrada)", command=lambda: compress_pdf(compression_levels["Media"]),
-                       font=("Arial", 10), bg="yellow", width=35)
-btn_medium.pack(pady=5)
-
-btn_low = tk.Button(root, text="Calidad Baja 80 DPI (Máxima compresión)", command=lambda: compress_pdf(compression_levels["Baja"]),
-                    font=("Arial", 10), bg="red", width=35)
-btn_low.pack(pady=5)
-
-# Botón para unir PDFs
-btn_merge = tk.Button(root, text="Unir Múltiples PDFs", command=merge_pdfs,
-                      font=("Arial", 10), bg="blue", fg="white", width=35)
-btn_merge.pack(pady=10)
-
-# Botón para proteger PDFs
-btn_protect = tk.Button(root, text="Proteger PDF con Contraseña", command=protect_pdf,
-                        font=("Arial", 10), bg="purple", fg="white", width=35)
-btn_protect.pack(pady=10)
+# Botones
+tk.Label(root, text="Selecciona una opción", font=("Arial", 12)).pack(pady=10)
+tk.Button(root, text="Calidad Alta (180 DPI)", command=lambda: compress_pdf(compression_levels["Alta"]), bg="lightgreen", width=35).pack(pady=5)
+tk.Button(root, text="Calidad Media (120 DPI)", command=lambda: compress_pdf(compression_levels["Media"]), bg="yellow", width=35).pack(pady=5)
+tk.Button(root, text="Calidad Baja (80 DPI)", command=lambda: compress_pdf(compression_levels["Baja"]), bg="red", width=35).pack(pady=5)
+tk.Button(root, text="Unir Múltiples PDFs", command=merge_pdfs, bg="blue", fg="white", width=35).pack(pady=10)
+tk.Button(root, text="Proteger PDF con Contraseña", command=protect_pdf, bg="purple", fg="white", width=35).pack(pady=15)
 
 # Barra de progreso
 progress_bar = ttk.Progressbar(root, length=300, mode="determinate")
@@ -220,5 +208,4 @@ progress_bar.pack(pady=15)
 author_label = tk.Label(root, text="Desarrollado por [Ing. Edwin Chavez - Dept. sistemas]", font=("Arial", 10, "italic"), fg="gray")
 author_label.pack(side="bottom", pady=10)
 
-# Ejecutar la interfaz
 root.mainloop()
