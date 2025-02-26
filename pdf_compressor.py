@@ -96,6 +96,13 @@ def merge_pdfs():
             messagebox.showerror("Error", "No seleccionaste archivos.")
             return
 
+# Verificar si los archivos ya fueron comprimidos
+        compressed_files = [file for file in files if is_pdf_compressed(file)]
+        if compressed_files:
+            messagebox.showerror("Error", "No puedes unir archivos que ya han sido comprimidos.\n\n"
+                                          "Orden correcto: UNIR → COMPRIMIR → PROTEGER.")
+            return
+
         output_path = filedialog.asksaveasfilename(title="Guardar PDF combinado", defaultextension=".pdf",
                                                    filetypes=[("Archivos PDF", "*.pdf")])
         if not output_path:
