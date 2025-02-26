@@ -40,11 +40,6 @@ Presiona "Aceptar" en todas las ventanas para guardar los cambios.
 <ins>Ing. Edwin Chavez - Dept. Sistemas</ins>
 Contacto: supervisor.sistemas@premiumfreightmx.com
 
-## Mejoras Futuras
-Agregar más opciones de protección (solo lectura, marcas de agua).  
-Opción para extraer imágenes de un PDF.  
-Multilenguaje (Español / Inglés).  
-
 ## Contribuciones
 Si quieres mejorar este proyecto, haz un fork y envía un pull request.
 Repositorio: github.com/PremiumFreightMX/utilities_pdf
